@@ -1,0 +1,34 @@
+# OS / editors
+.DS_Store
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+
+# Data & artifacts (adjust to your structure)
+Data/
+data/
+datasets/
+*.parquet
+*.csv
+*.tsv
+*.db
+*.log
+
+# Spark / Kafka
+spark-warehouse/
+metastore_db/
+derby.log
+kafka-logs/
+logs/
+
+# Notebooks
+.ipynb_checkpoints/
