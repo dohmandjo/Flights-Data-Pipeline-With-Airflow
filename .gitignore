@@ -1,19 +1,24 @@
+# Create/append .gitignore
+cat >> .gitignore <<'EOF'
 # OS / editors
 .DS_Store
 .vscode/
 .idea/
 
-# Python
-__pycache__/
-*.py[cod]
+# Python env & artifacts
 .venv/
 venv/
 env/
+__pycache__/
+*.py[cod]
 
 # Node
 node_modules/
 
-# Data & artifacts (adjust to your structure)
+# Data & generated artifacts (adjust to your repo)
+Data/
+data/
+datasets/
 *.parquet
 *.csv
 *.tsv
@@ -27,5 +32,6 @@ derby.log
 kafka-logs/
 logs/
 
-# Notebooks
+# Jupyter
 .ipynb_checkpoints/
+EOF
