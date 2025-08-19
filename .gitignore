@@ -14,9 +14,6 @@ env/
 node_modules/
 
 # Data & artifacts (adjust to your structure)
-Data/
-data/
-datasets/
 *.parquet
 *.csv
 *.tsv
