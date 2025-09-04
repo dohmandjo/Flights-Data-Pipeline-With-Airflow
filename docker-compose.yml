@@ -1,0 +1,89 @@
+version: "3.8"
+
+services:
+  # Kafka (KRaft, single broker)
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: flight_kafka
+    ports:
+      - "9094:9094"  # host-visible client port (optional)
+    environment:
+      - KAFKA_ENABLE_KRAFT=yes
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
+      # Three listeners: internal broker (9092), controller (9093), host client (9094)
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Python producer
+  producer:
+    build:
+      context: ./kafkaproducer
+      dockerfile: Dockerfile
+    container_name: flights_producer
+    environment:
+      - AVIATIONSTACK_KEY=${AVIATIONSTACK_KEY}     # put this in your .env
+      - BOOTSTRAP_SERVERS=kafka:9092               # talks to the internal listener
+      - TOPIC=flights_live
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Postgres (unchanged; keep if you need it)
+  postgres:
+    image: postgres:16
+    container_name: flight_postgres
+    ports:
+      - "${PGPORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${PGUSER}
+      - POSTGRES_PASSWORD=${PGPASSWORD}
+      - POSTGRES_DB=${PGDATABASE}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  spark:
+    build: ./spark_app
+    container_name: flight_spark
+    environment:
+      - KAFKA_BOOTSTRAP=flight_kafka:9092
+      - KAFKA_TOPIC=flights_live
+      - PGHOST=flight_postgres
+      - PGPORT=5432
+      - PGDATABASE=${PGDATABASE}
+      - PGUSER=${PGUSER}
+      - PGPASSWORD=${PGPASSWORD}
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command:
+      [
+        "/opt/bitnami/spark/bin/spark-submit",
+        "--conf","spark.jars.ivy=/opt/bitnami/spark/app/ivy",
+#        "--repositories","https://repo1.maven.org/maven2",
+        "--packages","org.postgresql:postgresql:42.7.3,org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0",
+        "/opt/bitnami/spark/app/stream_to_postgres.py"
+      ]
+
+volumes:
+  pgdata:

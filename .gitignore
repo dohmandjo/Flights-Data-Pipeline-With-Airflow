@@ -4,6 +4,7 @@ cat >> .gitignore <<'EOF'
 .DS_Store
 .vscode/
 .idea/
+.env
 
 # Python env & artifacts
 .venv/
