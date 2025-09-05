@@ -54,6 +54,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
+      - ./postgres/01_init_airflow.sql:/docker-entrypoint-initdb.d/01_init_airflow.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE}"]
       interval: 5s
@@ -84,6 +85,37 @@ services:
         "--packages","org.postgresql:postgresql:42.7.3,org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0",
         "/opt/bitnami/spark/app/stream_to_postgres.py"
       ]
+
+  airflow:
+    image: apache/airflow:2.9.3
+    container_name: flight_airflow
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@flight_postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=your_32byte_base64_fernet_key_here
+      - AIRFLOW__WEBSERVER__SECRET_KEY=some_random_webserver_secret
+      - AIRFLOW_UID=50000
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      # FIX this path: you mounted ./producer earlier, but your producer folder is ./kafkaproducer
+      # remove or correct as needed; Airflow doesn't need it unless your DAG imports it
+      # - ./kafkaproducer:/opt/airflow/kafkaproducer:ro
+    command: >
+      bash -c "
+        airflow db upgrade &&
+        airflow users create --username admin --password admin --firstname a --lastname b --role Admin --email admin@example.com || true &&
+        airflow webserver -p 8080 &
+        airflow scheduler
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:
