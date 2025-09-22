@@ -110,6 +110,8 @@ def normalize(rec):
         "flight": {"number": flight.get("number"), "iata": flight.get("iata"), "icao": flight.get("icao")},
         "departure": {
             "airport": dep.get("airport"),
+            "iata": dep.get("aita"),
+            "icao": dep.get("icao"),
             "schedule": iso(dep.get("scheduled")),
             "estimated": iso(dep.get("estimated")),
             "actual": iso(dep.get("actual")),
@@ -119,6 +121,8 @@ def normalize(rec):
         },
         "arrival": {
             "airport": arr.get("airport"),
+            "iata": arr.get("aita"),
+            "icao": arr.get("icao"),
             "schedule": iso(arr.get("scheduled")),
             "estimated": iso(arr.get("estimated")),
             "actual": iso(arr.get("actual")),

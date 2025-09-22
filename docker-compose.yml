@@ -53,8 +53,7 @@ services:
       - POSTGRES_DB=${PGDATABASE}
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/00_init.sql:ro
-      - ./postgres/01_init_airflow.sql:/docker-entrypoint-initdb.d/01_init_airflow.sql:ro
+      - ./postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE}"]
       interval: 5s
@@ -67,8 +66,8 @@ services:
     environment:
       - KAFKA_BOOTSTRAP=flight_kafka:9092
       - KAFKA_TOPIC=flights_live
-      - PGHOST=flight_postgres
-      - PGPORT=5432
+      - PGHOST=${PGHOST}    #flight_postgres
+      - PGPORT=${PGPORT}  ##5432
       - PGDATABASE=${PGDATABASE}
       - PGUSER=${PGUSER}
       - PGPASSWORD=${PGPASSWORD}
@@ -87,25 +86,43 @@ services:
       ]
 
   airflow:
-    image: apache/airflow:2.9.3
+    build: ./airflow
+    image: my-airflow:2.9.3-postgres
     container_name: flight_airflow
     environment:
+      - AIRFLOW__CORE__STORE_SERIALIZED_DAGS=True
+      - AIRFLOW__SCHEDULER__PARSING_PROCESSES=1
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@flight_postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=your_32byte_base64_fernet_key_here
       - AIRFLOW__WEBSERVER__SECRET_KEY=some_random_webserver_secret
       - AIRFLOW_UID=50000
+      - AIRFLOW_CONN_WAREHOUSE_DB=postgresql+psycopg2://flight_user:Password123@flight_postgres:5432/flight_pipeline
+
+      # Warehouse connection details
+      - PGHOST=${PGHOST}
+      - PGPORT=${PGPORT}
+      - PGDATABASE=${PGDATABASE}
+      - PGUSER=${PGUSER}
+      - PGPASSWORD=${PGPASSWORD}
+      #Google sheets
+      - GSHEET_ID=${GSHEET_ID}
+      - GWORKSHEET_TITLE=${GWORKSHEET_TITLE}
+      - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gsa-keys.json
+
     ports:
       - "8080:8080"
     volumes:
       - ./airflow/dags:/opt/airflow/dags
+      - ./gsheet_sync/elated-badge-471323-q5-020b3e2276e0.json:/secrets/gsa-keys.json:ro
       # FIX this path: you mounted ./producer earlier, but your producer folder is ./kafkaproducer
       # remove or correct as needed; Airflow doesn't need it unless your DAG imports it
       # - ./kafkaproducer:/opt/airflow/kafkaproducer:ro
     command: >
       bash -c "
-        airflow db upgrade &&
+        airflow db migrate &&
+        pip install --no-cache-dir pandas SQLAlchemy psycopg2-binary gspread gspread-dataframe &&
         airflow users create --username admin --password admin --firstname a --lastname b --role Admin --email admin@example.com || true &&
         airflow webserver -p 8080 &
         airflow scheduler
@@ -116,6 +133,28 @@ services:
       kafka:
         condition: service_healthy
     restart: unless-stopped
+
+  gsheet_sync:
+    build:
+      context: ./gsheet_sync
+      dockerfile: Dockerfile  # a small python image with your script
+    container_name: flight_gsheet
+    environment:
+      PGHOST: ${PGHOST} #flight_postgres
+      PGPORT: ${PGPORT} #"5432"
+      PGDATABASE: ${PGDATABASE} #flight_pipeline
+      PGUSER: ${PGUSER} #flight_user
+      PGPASSWORD: ${PGPASSWORD} #P@ssword123
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/gsa-keys.json #elated-badge-471323-q5.json
+      GSHEET_ID: ${GSHEET_ID} #Flights Warehouse
+      GWORKSHEET_TITLE: ${GWORKSHEET_TITLE} #Fact_Status
+    volumes:
+      - ./gsheet_sync/pg_to_gsheet.py:/app/pg_to_gsheet.py:ro
+      - ./gsheet_sync/elated-badge-471323-q5-020b3e2276e0.json:/secrets/gsa-keys.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: [ "bash", "-lc", "while true; do python /app/pg_to_gsheet.py; sleep 10; done" ]
 
 volumes:
   pgdata:

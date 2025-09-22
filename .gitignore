@@ -36,3 +36,6 @@ logs/
 # Jupyter
 .ipynb_checkpoints/
 EOF
+
+# Google service account
+*.json
