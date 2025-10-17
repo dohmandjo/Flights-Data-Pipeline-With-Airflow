@@ -1,4 +1,4 @@
-FROM bitnami/spark:latest
+FROM bitnami/spark:3.5
 USER root
 # If you need Python libs inside executors, install here; otherwise skip
 # RUN pip install --no-cache-dir <libs>

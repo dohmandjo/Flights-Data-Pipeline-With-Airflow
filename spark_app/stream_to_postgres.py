@@ -21,7 +21,7 @@ spark = (SparkSession.builder
 raw = (spark.readStream.format("kafka")
       .option("kafka.bootstrap.servers", os.getenv("KAFKA_BOOTSTRAP","flight_kafka:9092"))
       .option("subscribe", os.getenv("KAFKA_TOPIC", "flights_live"))
-      .option("startingOffsets","latest")
+      .option("startingOffsets", "earliest")
       .load()
 )
 

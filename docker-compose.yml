@@ -4,17 +4,17 @@ services:
   # Kafka (KRaft, single broker)
   kafka:
     image: bitnami/kafka:3.7
-    container_name: flight_kafka
+    container_name: kafka
     ports:
-      - "9094:9094"  # host-visible client port (optional)
+      - "9091:9091"  # host-visible client port (optional)
     environment:
       - KAFKA_ENABLE_KRAFT=yes
       - KAFKA_CFG_NODE_ID=1
       - KAFKA_CFG_PROCESS_ROLES=controller,broker
       - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
       # Three listeners: internal broker (9092), controller (9093), host client (9094)
-      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:9094
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,PLAINTEXT_HOST://:9091
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9091
       - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
@@ -31,7 +31,7 @@ services:
     build:
       context: ./kafkaproducer
       dockerfile: Dockerfile
-    container_name: flights_producer
+    container_name: producer_flight
     environment:
       - AVIATIONSTACK_KEY=${AVIATIONSTACK_KEY}     # put this in your .env
       - BOOTSTRAP_SERVERS=kafka:9092               # talks to the internal listener
@@ -44,9 +44,9 @@ services:
   # Postgres (unchanged; keep if you need it)
   postgres:
     image: postgres:16
-    container_name: flight_postgres
+    container_name: postgres_flight
     ports:
-      - "${PGPORT:-5432}:5432"
+      - "5433:5432"
     environment:
       - POSTGRES_USER=${PGUSER}
       - POSTGRES_PASSWORD=${PGPASSWORD}
@@ -55,16 +55,16 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE}"]
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE} -p 5432"]
       interval: 5s
       timeout: 5s
       retries: 20
 
   spark:
     build: ./spark_app
-    container_name: flight_spark
+    container_name: spark_flight
     environment:
-      - KAFKA_BOOTSTRAP=flight_kafka:9092
+      - KAFKA_BOOTSTRAP=kafka:9092
       - KAFKA_TOPIC=flights_live
       - PGHOST=${PGHOST}    #flight_postgres
       - PGPORT=${PGPORT}  ##5432
@@ -81,24 +81,24 @@ services:
         "/opt/bitnami/spark/bin/spark-submit",
         "--conf","spark.jars.ivy=/opt/bitnami/spark/app/ivy",
 #        "--repositories","https://repo1.maven.org/maven2",
-        "--packages","org.postgresql:postgresql:42.7.3,org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0",
+        "--packages","org.postgresql:postgresql:42.7.3,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.6",
         "/opt/bitnami/spark/app/stream_to_postgres.py"
       ]
 
   airflow:
     build: ./airflow
     image: my-airflow:2.9.3-postgres
-    container_name: flight_airflow
+    container_name: airflow_flight
     environment:
       - AIRFLOW__CORE__STORE_SERIALIZED_DAGS=True
       - AIRFLOW__SCHEDULER__PARSING_PROCESSES=1
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@flight_postgres:5432/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=your_32byte_base64_fernet_key_here
       - AIRFLOW__WEBSERVER__SECRET_KEY=some_random_webserver_secret
       - AIRFLOW_UID=50000
-      - AIRFLOW_CONN_WAREHOUSE_DB=postgresql+psycopg2://flight_user:Password123@flight_postgres:5432/flight_pipeline
+      - AIRFLOW_CONN_WAREHOUSE_DB=postgresql+psycopg2://flight_user:Password123@postgres:5432/flight_pipeline
 
       # Warehouse connection details
       - PGHOST=${PGHOST}
@@ -138,7 +138,7 @@ services:
     build:
       context: ./gsheet_sync
       dockerfile: Dockerfile  # a small python image with your script
-    container_name: flight_gsheet
+    container_name: gsheet_flight
     environment:
       PGHOST: ${PGHOST} #flight_postgres
       PGPORT: ${PGPORT} #"5432"
