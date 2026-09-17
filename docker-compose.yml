@@ -3,7 +3,7 @@ version: "3.8"
 services:
   # Kafka (KRaft, single broker)
   kafka:
-    image: bitnami/kafka:3.7
+    image: soldevelo/kafka:3.7
     container_name: kafka
     ports:
       - "9091:9091"  # host-visible client port (optional)
