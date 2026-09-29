@@ -1,13 +1,18 @@
 # Import packages 
 import os
-from pyspark.sql import SparkSession, functions as F, types as T
+
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+from pyspark.sql import types as T
 
 # Get environment variables and create postgres connection
 pg_url = f"jdbc:postgresql://{os.getenv('PGHOST','postgres')}:{os.getenv('PGPORT','5432')}/{os.getenv('PGDATABASE', 'flight_pipeline')}"
 
 # Database user credential
-pg_user = os.getenv("PGUSER", "flight_USER")
-pg_pass = os.getenv("PGPASSWORD", "P@ssword123")
+pg_user = os.getenv("PGUSER", "flight_user")
+pg_pass = os.getenv("PGPASSWORD")
+if not pg_pass:
+    raise SystemExit("PGPASSWORD is not set (copy .env.example to .env).")
 CHECKPOINT = os.getenv("CHECKPOINT_DIR", "/tmp/chk/flights_stream")
 
 # Initialize spark session with postgreSQL JDBC driver
@@ -19,7 +24,7 @@ spark = (SparkSession.builder
 
 # Define streaming dataframe reading from kafka topic
 raw = (spark.readStream.format("kafka")
-      .option("kafka.bootstrap.servers", os.getenv("KAFKA_BOOTSTRAP","flight_kafka:9092"))
+      .option("kafka.bootstrap.servers", os.getenv("KAFKA_BOOTSTRAP","kafka:9092"))
       .option("subscribe", os.getenv("KAFKA_TOPIC", "flights_live"))
       .option("startingOffsets", "earliest")
       .load()
