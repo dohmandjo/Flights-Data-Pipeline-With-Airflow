@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Lint, DAG checks and Postgres tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Disposable database: tests/pg.py applies postgres/00_warehouse.sql, which DROPs tables.
+      TEST_PG_DSN: host=localhost port=5432 dbname=postgres user=postgres password=postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install Airflow (pinned with the official constraints file) and the test tools
+        run: |
+          pip install "apache-airflow==2.9.3" -r requirements-dev.txt \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.3/constraints-3.11.txt"
+      - run: ruff check .
+      - run: pytest -q
+      - name: Validate the Compose file
+        run: |
+          cp .env.example .env
+          sed -i 's/^AIRFLOW_FERNET_KEY=$/AIRFLOW_FERNET_KEY=ci/;s/^AIRFLOW_SECRET_KEY=$/AIRFLOW_SECRET_KEY=ci/;s/^AVIATIONSTACK_KEY=$/AVIATIONSTACK_KEY=ci/' .env
+          docker compose config -q
