@@ -122,6 +122,7 @@ def write_batch(df, _):
             F.col("flight_iata").alias("flight_iata"),
             F.col("flight_icao").alias("flight_icao"),
             F.col("airline_iata").alias("airline_iata"),
+            F.col("airline_icao").alias("airline_icao"),
             F.col("airline_name").alias("airline_name"),
             F.col("dep_airport").alias("dep_airport"),
             F.col("dep_airport_iata").alias("dep_airport_iata"),
