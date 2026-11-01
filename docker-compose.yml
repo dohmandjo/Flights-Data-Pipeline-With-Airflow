@@ -64,6 +64,7 @@ services:
       AVIATIONSTACK_KEY: ${AVIATIONSTACK_KEY:?set AVIATIONSTACK_KEY in .env}
       BOOTSTRAP_SERVERS: kafka:9092
       TOPIC: flights_live
+      POLL_SECONDS: ${POLL_SECONDS:-15}   # one API request per poll; raise it to stay within your plan's quota
     depends_on:
       kafka: {condition: service_healthy}
     restart: unless-stopped
