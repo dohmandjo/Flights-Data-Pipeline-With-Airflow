@@ -1,0 +1,2 @@
+# pandas, SQLAlchemy, psycopg2 and the Postgres provider already ship with the Airflow image.
+gspread>=6.0,<7

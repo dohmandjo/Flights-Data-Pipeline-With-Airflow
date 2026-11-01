@@ -1,0 +1,10 @@
+# Test/lint tooling. The DAG tests also need Airflow itself; see .github/workflows/ci.yml for the pinned install.
+pytest>=7.4
+ruff>=0.3
+pandas>=2.1,<2.2
+SQLAlchemy>=1.4,<2
+psycopg2-binary>=2.9
+gspread>=6.0,<7
+kafka-python>=2.0.2,<3
+requests>=2.31,<3
+python-dateutil>=2.9,<3

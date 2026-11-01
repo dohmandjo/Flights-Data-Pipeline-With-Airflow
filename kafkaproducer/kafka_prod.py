@@ -1,11 +1,15 @@
-import os, time, json, requests
-from kafka import KafkaProducer
+import json
+import os
+import time
 from datetime import datetime, timezone
+
+import requests
 from dateutil import parser
+from kafka import KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import TopicAlreadyExistsError
 
-'''
+r'''
 below is how the data looks like when pulled from the API
 {
 "flight_date":"2025-08-21",
@@ -55,32 +59,41 @@ below is how the data looks like when pulled from the API
 }
 '''
 
-BASE = "http://api.aviationstack.com/v1/flights"
-API_KEY = os.environ.get("AVIATIONSTACK_KEY")
-if not API_KEY:
-    raise ValueError("Please set AVIATIONSTACK_KEY env var")
-
+BASE = os.environ.get("API_URL", "http://api.aviationstack.com/v1/flights")   # free tier is HTTP-only
 TOPIC = os.environ.get("TOPIC", "flights_live")
-BOOTSTRAP = os.environ.get("BOOTSTRAP_SERVERS", "kafka:9092")  # <— default for Docker network
+BOOTSTRAP = os.environ.get("BOOTSTRAP_SERVERS", "kafka:9092")  # default for the Docker network
+POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "15"))
 
-producer = KafkaProducer(
-    bootstrap_servers=BOOTSTRAP,
-    value_serializer=lambda x: json.dumps(x).encode("utf-8"),
-    linger_ms=50,
-    acks="all",
-    retries=5,
-    request_timeout_ms=20000,
-)
+
+def make_producer():
+    return KafkaProducer(
+        bootstrap_servers=BOOTSTRAP,
+        value_serializer=lambda x: json.dumps(x).encode("utf-8"),
+        linger_ms=50,
+        acks="all",
+        retries=5,
+        request_timeout_ms=20000,
+    )
+
 
 def fetch_live(limit=50, offset=0):
-    params = {"access_key": API_KEY, "flight_status": "active", "limit": limit, "offset": offset}
+    """One page of active flights. Raises on HTTP errors AND on Aviationstack's HTTP-200 error bodies."""
+    api_key = os.environ.get("AVIATIONSTACK_KEY")
+    if not api_key:
+        raise RuntimeError("AVIATIONSTACK_KEY is not set (see .env.example)")
+    params = {"access_key": api_key, "flight_status": "active", "limit": limit, "offset": offset}
     r = requests.get(BASE, params=params, timeout=20)
     r.raise_for_status()
-    return r.json()
+    payload = r.json()
+    if "error" in payload:      # e.g. invalid key or monthly quota exhausted, returned with status 200
+        raise RuntimeError(f"Aviationstack error: {payload['error']}")
+    return payload
+
 
 def iso(ts):
-    if not ts: return None
-    return parser.isoparse(ts).astimezone().isoformat()
+    if not ts:
+        return None
+    return parser.isoparse(ts).astimezone(timezone.utc).isoformat()   # always UTC, whatever the container's zone
 
 
 def ensure_topic(bootstrap, topic, partitions=1, rf=1):
@@ -110,7 +123,7 @@ def normalize(rec):
         "flight": {"number": flight.get("number"), "iata": flight.get("iata"), "icao": flight.get("icao")},
         "departure": {
             "airport": dep.get("airport"),
-            "iata": dep.get("aita"),
+            "iata": dep.get("iata"),
             "icao": dep.get("icao"),
             "schedule": iso(dep.get("scheduled")),
             "estimated": iso(dep.get("estimated")),
@@ -121,7 +134,7 @@ def normalize(rec):
         },
         "arrival": {
             "airport": arr.get("airport"),
-            "iata": arr.get("aita"),
+            "iata": arr.get("iata"),
             "icao": arr.get("icao"),
             "schedule": iso(arr.get("scheduled")),
             "estimated": iso(arr.get("estimated")),
@@ -134,18 +147,29 @@ def normalize(rec):
         "source": "aviationstack",
     }
 
-if __name__ == "__main__":
+def main():
     ensure_topic(BOOTSTRAP, TOPIC, partitions=1, rf=1)
-    offset = 0
+    producer = make_producer()
+    failures = 0
     while True:
         try:
-            payload = fetch_live(limit=50, offset=offset)
+            payload = fetch_live(limit=50, offset=0)
+            sent = 0
             for rec in payload.get("data", []):
                 evt = normalize(rec)
                 if evt and evt["flight_key"]:
                     producer.send(TOPIC, evt)
-            time.sleep(15)
-        except requests.HTTPError:
-            time.sleep(30)
-        except Exception:
-            time.sleep(10)
+                    sent += 1
+            producer.flush()
+            print(f"sent {sent} events", flush=True)
+            failures = 0
+            time.sleep(POLL_SECONDS)
+        except Exception as exc:    # keep the container alive, but never fail silently
+            failures += 1
+            wait = min(300, 10 * 2 ** min(failures, 5))
+            print(f"poll failed ({exc!r}); retrying in {wait}s", flush=True)
+            time.sleep(wait)
+
+
+if __name__ == "__main__":
+    main()

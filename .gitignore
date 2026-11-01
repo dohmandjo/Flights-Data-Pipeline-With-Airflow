@@ -1,41 +1,35 @@
-# Create/append .gitignore
-cat >> .gitignore <<'EOF'
-# OS / editors
-.DS_Store
-.vscode/
-.idea/
+# --- Secrets / local config (never commit) ---
 .env
+*.pem
+*.key
+# Google service-account keys (any JSON: this repo has no JSON files that belong in git)
+*.json
+secrets/
 
-# Python env & artifacts
-.venv/
-venv/
-env/
+# --- Airflow runtime artifacts ---
+airflow/airflow.cfg
+airflow/airflow.db
+airflow/logs/
+airflow/webserver_config.py
+airflow/standalone_admin_password.txt
+
+# --- Python ---
 __pycache__/
 *.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
 
-# Node
-node_modules/
-
-# Data & generated artifacts (adjust to your repo)
-Data/
-data/
-datasets/
-*.parquet
-*.csv
-*.tsv
-*.db
-*.log
-
-# Spark / Kafka
+# --- Spark / Kafka / data ---
 spark-warehouse/
 metastore_db/
 derby.log
-kafka-logs/
-logs/
+checkpoint/
+checkpoints/
+*.parquet
 
-# Jupyter
-.ipynb_checkpoints/
-EOF
-
-# Google service account
-*.json
+# --- OS / editors ---
+.DS_Store
+.vscode/
+.idea/
