@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from _defaults import DEFAULT_ARGS
 from airflow import DAG
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+
+from _defaults import DEFAULT_ARGS
 from warehouse_sql import LOAD_STATEMENTS
 
 with DAG(

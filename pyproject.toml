@@ -7,6 +7,8 @@ select = ["E4", "E7", "E9", "F", "I", "B"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["sheets_export", "warehouse_sql", "_defaults", "pg"]
+# The repo's airflow/ folder makes ruff guess the Airflow package is first-party.
+known-third-party = ["airflow"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

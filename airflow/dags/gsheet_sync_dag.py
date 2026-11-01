@@ -5,11 +5,11 @@ import os
 from datetime import datetime, timezone
 
 import gspread
-
-from _defaults import DEFAULT_ARGS
 from airflow import DAG
 from airflow.models import Variable
 from airflow.operators.python import PythonOperator
+
+from _defaults import DEFAULT_ARGS
 from sheets_export import INITIAL_STATE, export_new_rows, make_engine
 
 STATE_VAR_KEY = "gsheet_export_watermark"   # JSON: {"ts": "...", "key": "..."}
